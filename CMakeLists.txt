@@ -20,12 +20,8 @@ endif()
 
 set(BUILD_ARCH "x64")
 
-
-
-
 # 设置查找路径 (鸿蒙下 必须设置 否者会报 找不到 qt sdk )
 list(APPEND CMAKE_FIND_ROOT_PATH ${CMAKE_PREFIX_PATH})
-
 
 # 查找 版本
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Core REQUIRED)
@@ -45,14 +41,16 @@ foreach(Lib ${PackageLibs})
     list(APPEND QtLinkLibs Qt${QT_VERSION_MAJOR}::${Lib})
 endforeach(Lib)
 
-add_definitions(-DTOOL_LIBRARY)
+#add_definitions(-DTOOL_LIBRARY)
+# 添加spdlog源码目录（自动编译spdlog）
+add_subdirectory(spdlog-1.15.3)
 
-set(3RD_INCLUDE_DIR
-        "${CMAKE_CURRENT_SOURCE_DIR}/spdlog/include"
-)
-set(3RD_LIBS
-        "${CMAKE_CURRENT_SOURCE_DIR}/spdlog/lib/spdlog.lib"
-)
+#set(3RD_INCLUDE_DIR
+#        "${CMAKE_CURRENT_SOURCE_DIR}/spdlog/include"
+#)
+#set(3RD_LIBS
+#        "${CMAKE_CURRENT_SOURCE_DIR}/spdlog/lib/spdlog.lib"
+#)
 
 
 # 设置 头文件目录 (这种设置方式 使用头文件 需要添加目录) 比如 "a/b.h"
@@ -140,6 +138,7 @@ target_link_libraries(
         ${PROJECT_NAME} PRIVATE
         ${QtLinkLibs}
         ${3RD_LIBS}
+        spdlog::spdlog
 )
 
 
