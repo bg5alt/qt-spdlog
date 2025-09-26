@@ -3,18 +3,20 @@
 
 #include <spdlog/spdlog.h>
 
+#include <utility>
+
 
 class LogStreamImpl {
 public:
     LogStreamImpl(spdlog::level::level_enum level, std::shared_ptr<spdlog::logger> logger)
-        : level(level), logger(logger) {}
+        : level(level), logger(std::move(logger)) {}
 
     spdlog::level::level_enum level;
     std::shared_ptr<spdlog::logger> logger;
 };
 
 
-LogStream::LogStream(int level, const std::shared_ptr<void>& logger) {
+LogStream::LogStream(const int level, const std::shared_ptr<void>& logger) {
     impl = std::make_unique<LogStreamImpl>(LogManagerPrivate::toSpdlogLevel(level), std::static_pointer_cast<spdlog::logger>(logger));
 }
 

@@ -4,7 +4,6 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>
 #include <spdlog/details/thread_pool.h>
-#include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
@@ -13,7 +12,6 @@
 #include <fstream>
 #include <filesystem>
 #include <chrono>
-#include <format>
 #include <ctime>
 
 #include "estream.h"
@@ -79,7 +77,7 @@ LogManager::~LogManager() {
 }
 
 // 初始化日志系统
-void LogManager::init(int q_size, int thread_count ) {
+void LogManager::init(const int q_size, const int thread_count ) {
     if (!d_ptr->_init) {
         d_ptr->_init = true;
 #ifdef _WIN32
