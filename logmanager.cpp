@@ -65,11 +65,8 @@ LogManager::LogManager() : d_ptr(new LogManagerPrivate) {
 }
 LogManager::~LogManager() {
     // 确保所有日志在程序结束前被刷新
-    spdlog::shutdown();
-    {
-        std::lock_guard<std::mutex> lock(d_ptr->_cleanup_mutex);
-        d_ptr->_cleanup_thread_running = false; // 通知线程退出
-    }
+    // spdlog::shutdown();
+    d_ptr->_cleanup_thread_running = false; // 通知线程退出
     if (d_ptr->_cleanup_thread.joinable()) {
         d_ptr->_cleanup_thread.join(); // 等待线程结束
     }
