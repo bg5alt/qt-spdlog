@@ -199,12 +199,13 @@ public:
 
     // Qt 容器处理
     // // 通用容器处理 (QList/QVector/QStringList)
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     template <typename T>
     EStream& operator<<(const QList<T>& lst)
     {
         return writeContainer(lst,'[',']');
     }
-
+#endif
     template <typename T>
     EStream& operator<<(const QVector<T>& lst)
     {
@@ -307,6 +308,11 @@ public:
     // 获取内部流
     const std::ostringstream& stream() const {
         return oss;
+    }
+
+    // 获取字符串
+    std::string str() const {
+        return oss.str();
     }
 
 

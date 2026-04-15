@@ -9,7 +9,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-set(CMAKE_PREFIX_PATH "D:/Qt/Qt5.15.2/5.15.2/msvc2019_64")
+set(CMAKE_PREFIX_PATH "/Users/zhangqi/Qt/6.5.3/macos")
+set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 # 设置 debug 库 带 d
 set(CMAKE_DEBUG_POSTFIX d)
@@ -30,7 +31,7 @@ find_package(QT NAMES Qt6 Qt5 COMPONENTS Core REQUIRED)
 if ("${QT_VERSION_MAJOR}" MATCHES "5")
     set(PackageLibs Core Gui Widgets Network Svg Concurrent)
 elseif ("${QT_VERSION_MAJOR}" MATCHES "6")
-    set(PackageLibs Core Gui Widgets Network Svg Concurrent  SvgWidgets Core5Compat )
+    set(PackageLibs Core Gui Widgets Network Svg Concurrent )
 endif ()
 
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS ${PackageLibs}  LinguistTools REQUIRED)
@@ -51,6 +52,7 @@ add_subdirectory(spdlog-1.15.3)
 #set(3RD_LIBS
 #        "${CMAKE_CURRENT_SOURCE_DIR}/spdlog/lib/spdlog.lib"
 #)
+
 
 
 # 设置 头文件目录 (这种设置方式 使用头文件 需要添加目录) 比如 "a/b.h"
@@ -131,6 +133,7 @@ elseif("${QT_VERSION_MAJOR}" MATCHES "6")
 endif()
 
 
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 # 关联 头文件
 target_include_directories(${PROJECT_NAME} PRIVATE ${3RD_INCLUDE_DIR})
 # 关联 库
@@ -140,7 +143,6 @@ target_link_libraries(
         ${3RD_LIBS}
         spdlog::spdlog
 )
-
 
 # 设置 QM 文件的输出路径
 foreach(QM_FILE ${QM_FILES})

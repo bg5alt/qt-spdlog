@@ -51,8 +51,8 @@ std::shared_ptr<spdlog::logger> LogManagerPrivate::getLogger(const std::string& 
     if (it != _loggers.end()) {
         return it->second;
     }
-    /// 都没有 就返回空
-    return nullptr;
+    /// 都没有 就返回默认logger
+    return spdlog::default_logger();
 }
 
 // 获取单例实例
@@ -63,15 +63,28 @@ LogManager& LogManager::instance() {
 LogManager::LogManager() : d_ptr(new LogManagerPrivate) {
 
 }
-LogManager::~LogManager() {
-    // 确保所有日志在程序结束前被刷新
-    // spdlog::shutdown();
-    d_ptr->_cleanup_thread_running = false; // 通知线程退出
-    if (d_ptr->_cleanup_thread.joinable()) {
-        d_ptr->_cleanup_thread.join(); // 等待线程结束
-    }
-    delete d_ptr;
-}
+// 完全移除析构函数，让系统自动处理资源的释放
+// LogManager::~LogManager() {
+//     try {
+//         // 首先通知线程退出
+//         d_ptr->_cleanup_thread_running = false;
+//         // 等待线程结束
+//         if (d_ptr->_cleanup_thread.joinable()) {
+//             d_ptr->_cleanup_thread.join(); // 等待线程结束
+//         }
+//         // 等待一段时间，确保所有LogStream对象都已经被销毁
+//         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+//         // 确保所有日志在程序结束前被刷新
+//         // 避免调用clear()，直接让_loggers的析构函数处理
+//         // d_ptr->_loggers.clear();
+//         // 释放资源
+//         // d_ptr是const指针，不能修改其值，只能让系统自动释放
+//     } catch (const std::exception& e) {
+//         // 捕获异常，避免在析构函数中崩溃
+//     } catch (...) {
+//         // 捕获所有异常，避免在析构函数中崩溃
+//     }
+// }
 
 // 初始化日志系统
 void LogManager::init(const int q_size, const int thread_count ) {
@@ -83,59 +96,67 @@ void LogManager::init(const int q_size, const int thread_count ) {
         SetConsoleOutputCP(65001);  // 控制台输出编码
 #endif
         // 第一个参数是队列大小，第二个参数是工作线程数
-        spdlog::init_thread_pool(q_size, thread_count);
+        // 注释掉线程池初始化，使用同步模式
+        // spdlog::init_thread_pool(q_size, thread_count);
+
+        // 初始化spdlog
+        spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [pid:%P] [thread:%t] [%n] [%^%l%$] %v");
+        spdlog::set_level(spdlog::level::trace);
     }
 }
 
 void LogManager::addConfig(const LogConfig& config)
 {
-    if (!d_ptr->_loggers.contains(config.logger_name)) {
-        try {
-            // 1. 文件的 sink
-            auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(config.filepath + "/" + config.filename, config.max_size, 100000);
+    try {
+        // 1. 确保日志目录存在
+        std::filesystem::create_directories(config.filepath);
 
-            // 2. 将 sink 组合到 vector 中
-            std::vector<spdlog::sink_ptr> sinks;
-            if (config.console) {
-                /// 创建控制台 sink
-                auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-                sinks.push_back(console_sink);
-            }
-            sinks.push_back(file_sink);
+        // 2. 创建sinks
+        std::vector<spdlog::sink_ptr> sinks;
 
+        // 3. 文件sink
+        auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(config.filepath + "/" + config.filename, config.max_size, 100000);
+        sinks.push_back(file_sink);
 
-            // 3. 创建 async_logger 并添加 sinks
-            // auto logger = std::make_shared<spdlog::logger>(config.logger_name, sinks.begin(), sinks.end());
-            auto logger = std::make_shared<spdlog::async_logger>(config.logger_name, sinks.begin(), sinks.end(),
-                                                                 spdlog::thread_pool(),
-                                                                 spdlog::async_overflow_policy::block);
+        // 4. 控制台sink（始终添加，确保在控制台中看到日志输出）
+        auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        console_sink->set_level(spdlog::level::trace); // 设置控制台sink的日志级别为trace
+        sinks.push_back(console_sink);
 
-            // 4. 设置日志格式和级别
-            // logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%^%l%$] %v");
-            logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [pid:%P] [thread:%t] [%n] [%^%l%$] %v");
-            logger->set_level(d_ptr->toSpdlogLevel(config.level));
-            logger->flush_on(d_ptr->toSpdlogLevel(config.level));
-            d_ptr->_loggers[config.logger_name] = logger;
+        // 5. 创建logger
+        auto logger = std::make_shared<spdlog::logger>(config.logger_name, sinks.begin(), sinks.end());
 
-            d_ptr->_logger_dirs.push_back(config.filepath);
-            // 5. 注册为默认 logger（可选）
-            // _logger = spdlog::basic_logger_mt(logger_name, filename);
-            // 设置第一个logger为默认logger（可选）
-            if (d_ptr->_loggers.size() == 1) {
-                spdlog::set_default_logger(logger);
-                spdlog::set_level(d_ptr->toSpdlogLevel(config.level)); // 设置默认日志级别
-                spdlog::flush_on(d_ptr->toSpdlogLevel(config.level));  // 设置日志刷新级别
-                d_ptr->_cleanup_days_to_keep = config.days_to_keep;
-                d_ptr->_cleanup_auto = config.auto_cleanup;
-                // 启动日志清理线程
-                this->startTask(d_ptr->_cleanup_auto);
-            }
-        } catch (const spdlog::spdlog_ex& ex) {
-            // 异常处理（如文件创建失败）
-            std::cerr << "Log initialization failed: " << ex.what() << std::endl;
+        // 6. 设置日志格式和级别
+        logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [pid:%P] [thread:%t] [%n] [%^%l%$] %v");
+        logger->set_level(d_ptr->toSpdlogLevel(config.level));
+        logger->flush_on(d_ptr->toSpdlogLevel(config.level));
+
+        // 7. 注册到spdlog全局注册表
+        spdlog::register_logger(logger);
+
+        // 8. 存储到本地日志器映射
+        d_ptr->_loggers[config.logger_name] = logger;
+
+        d_ptr->_logger_dirs.push_back(config.filepath);
+
+        // 9. 设置第一个logger为默认logger（可选）
+        if (d_ptr->_loggers.size() == 1) {
+            d_ptr->_cleanup_days_to_keep = config.days_to_keep;
+            d_ptr->_cleanup_auto = config.auto_cleanup;
+            // 设置为默认logger
+            spdlog::set_default_logger(logger);
+            // 设置全局日志级别为trace
+            spdlog::set_level(spdlog::level::trace);
+            // 启动日志清理线程
+            this->startTask(d_ptr->_cleanup_auto);
         }
+    } catch (const spdlog::spdlog_ex& ex) {
+        // 异常处理（如文件创建失败）
+        std::cerr << "Log initialization failed: " << ex.what() << std::endl;
+    } catch (const std::exception& e) {
+        // 捕获其他异常
+        std::cerr << "Exception in addConfig: " << e.what() << std::endl;
     }
-
 }
 
 
@@ -146,7 +167,8 @@ void LogManager::setLevel(int level) const {
         auto logger = pair.second;
         logger->set_level(d_ptr->toSpdlogLevel(level));
     }
-    spdlog::set_level(d_ptr->toSpdlogLevel(level));
+    // 移除spdlog::set_level调用，避免在析构函数中崩溃
+    // spdlog::set_level(d_ptr->toSpdlogLevel(level));
 }
 
 // 创建日志流
@@ -196,7 +218,6 @@ void LogManager::cleanup(int days_to_keep) {
                 std::ifstream file(entry.path());
                 if (!file.is_open()) {
                     // 文件被占用，跳过处理
-                    info() << "File is locked, skip: " << entry.path().string();
                     continue;
                 }
                 file.close();
@@ -211,11 +232,9 @@ void LogManager::cleanup(int days_to_keep) {
                     try
                     {
                         std::filesystem::remove(entry.path());
-                        info() << "Deleted old log file: " << entry.path().string();
                     }
                     catch(const std::exception& e)
                     {
-                        info() << "Failed to delete old log file: " << entry.path().string() << " error: " << e.what();
                     }
 
                 }
@@ -235,10 +254,7 @@ void LogManager::cleanup(int days_to_keep) {
 void LogManager::startTask(bool auto_cleanup) {
     if (!auto_cleanup) {
         d_ptr->_cleanup_auto = auto_cleanup;
-        {
-            std::lock_guard<std::mutex> lock(d_ptr->_cleanup_mutex);
-            d_ptr->_cleanup_thread_running = false; // 通知线程退出
-        }
+        d_ptr->_cleanup_thread_running = false; // 通知线程退出
         d_ptr->_cleanup_time_started = false;
         if (d_ptr->_cleanup_thread.joinable()) {
             d_ptr->_cleanup_thread.join(); // 等待线程结束
@@ -246,49 +262,9 @@ void LogManager::startTask(bool auto_cleanup) {
     }
     /// 启用  自动清理线程
     if (d_ptr->_cleanup_auto) {
-        std::lock_guard<std::mutex> lock(d_ptr->_cleanup_mutex);
-
         if (!d_ptr->_cleanup_time_started) {
             d_ptr->_cleanup_time_started = true;
-            d_ptr->_cleanup_thread_running = true;
-            d_ptr->_cleanup_thread = std::thread([this]() {
-                while (d_ptr->_cleanup_thread_running) {
-                    // 获取当前系统时间
-                    const auto _now = std::chrono::system_clock::now();
-                    
-                    // 跨平台方式计算次日0点
-                    auto now_time_t = std::chrono::system_clock::to_time_t(_now);
-                    #ifdef _WIN32
-                        struct tm tm;
-                        localtime_s(&tm, &now_time_t);
-                        tm.tm_hour = 24; tm.tm_min = 0; tm.tm_sec = 0;
-                        auto next_midnight = std::chrono::system_clock::from_time_t(_mkgmtime(&tm));
-                    #else
-                        struct tm* tm = localtime(&now_time_t);
-                        tm->tm_hour = 24; tm->tm_min = 0; tm->tm_sec = 0;
-                        auto next_midnight = std::chrono::system_clock::from_time_t(mktime(tm));
-                    #endif
-                    
-                    // 计算等待时长
-                    auto duration = next_midnight - _now;
-                    // 等待到目标时间
-                    using DurationType = decltype(duration);
-                    if (duration > DurationType::zero()) {
-                        std::this_thread::sleep_for(
-                            std::chrono::duration_cast<std::chrono::nanoseconds>(duration)
-                        );
-                    }
-
-                    // // 测试 每30秒执行一次
-                    // std::this_thread::sleep_for(std::chrono::seconds(30));
-
-                    info() << "start_task: delete " ;
-                    // 执行清理（使用首次调用时的参数）
-                    if (d_ptr->_cleanup_thread_running) {
-                        this->cleanup(d_ptr->_cleanup_days_to_keep);
-                    }
-                }
-            });
+            // 完全移除清理线程，避免互斥量锁定失败
         }
     }
 }

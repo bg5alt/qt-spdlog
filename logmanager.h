@@ -72,7 +72,6 @@ public:
 
 private:
    LogManager();
-   ~LogManager();
    // 禁止复制和赋值
    LogManager(const LogManager&) = delete;
    LogManager& operator=(const LogManager&) = delete;

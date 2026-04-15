@@ -19,6 +19,7 @@
 #include <QtConcurrent>
 
 #include "logmanager.h"
+#include "spdlog-1.15.3/include/spdlog/spdlog.h"
 
 #include <sstream>
 #include <string>
@@ -26,20 +27,24 @@
 #ifdef _WIN32
 #include <process.h>
 #define getpid _getpid
+#else
+#include <unistd.h>
 #endif
 
 
 
-int main(int argc, char* argv[])
-{
-    QApplication a(argc, argv);
+int main(int argc, char* argv[]) {
+   // QApplication a(argc, argv);
 
     // qApp->setFont(QFont("Courier New", 13));
 
 
     LogInit();
-    LogAddConfig({"log","logs","dzh.log",0,1024*5,10,false});
-    LogAddConfig({"bg","logs","bg.log",0,1024*5,10,false});
+    LogAddConfig({"log","logs","dzh.log",0,1024*5,10,true});
+    LogAddConfig({"bg","logs","bg.log",0,1024*5,10,true});
+    
+    // 直接使用spdlog的默认logger来记录日志
+    spdlog::info("Test: This is an info message");
 
     // 获取日志器并记录日志
     LogTrace() << "This is an trace message.";
@@ -128,20 +133,20 @@ int main(int argc, char* argv[])
     std::stringstream ss;
     ss << thread_id;
 
-    LogInfo() << ss.str();
     LogInfo("bg") <<"pid:"<< getpid() <<" thread:"<< ss.str();
-    QtConcurrent::run([]()
+    auto future =  QtConcurrent::run([&]()
     {
         LogInfo() << " ------------------- ";
         // 获取当前线程 ID
         std::thread::id thread_id = std::this_thread::get_id();
 
         // 将线程 ID 转换为字符串
-        std::stringstream ss;
-        ss << thread_id;
-        LogInfo() << ss.str();
-        LogInfo("bg") <<"pid:"<< getpid() <<" thread:"<< ss.str();
+        std::stringstream ss2;
+        ss2 << thread_id;
+        LogInfo("bg") <<"pid:"<< getpid() <<" thread:"<< ss2.str();
     });
+    // 等待并发任务完成
+    future.waitForFinished();
     LogInfo() << QColor("#FFFFFF");
     LogInfo() << QColor(0xFFFFFF);
     LogInfo() << QSize(32,32);
@@ -172,8 +177,9 @@ int main(int argc, char* argv[])
 
     LogInfo() << qu;
 
+    // 等待一段时间，确保所有日志操作都已经完成
+    // std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-
-    //return 0;
-    return QApplication::exec();
+    return 0;
+    //return QApplication::exec();
 }
