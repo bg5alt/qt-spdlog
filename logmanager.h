@@ -16,6 +16,7 @@ struct LogConfig {
     int days_to_keep = 10;             // 保留日志天数
     bool auto_cleanup = true;          // 是否自动清理日志
     bool console = true;               // 是否输出到控制台
+    bool append_pid = false;           // 多进程时在文件名中加入进程ID，避免多进程写同一文件
 };
 
 class LogManagerPrivate;
@@ -60,21 +61,19 @@ public:
     */
    void cleanup(int days_to_keep = 10);
 
-
    /*!
-    * @brief 启动日志清理线程
-    *        应用运行时在每天0点执行一次清理日志
-    *        也可直接设置auto_cleanup 参数直接关闭清理日志线程.
-    *        调用此函数默认会开启清理日志线程,关闭应用时销毁清理日志该线程.
-    * @param auto_cleanup  是否自动清理日志
+    * @brief 刷新并关闭日志系统，程序退出前应调用
     */
-   void startTask(bool auto_cleanup = true);
+   void shutdown();
 
 private:
    LogManager();
+   ~LogManager();
    // 禁止复制和赋值
    LogManager(const LogManager&) = delete;
    LogManager& operator=(const LogManager&) = delete;
+
+   LogStream makeStream(int level, const std::string& logger_name) const;
 
  private:
      LogManagerPrivate* const d_ptr;
@@ -98,6 +97,8 @@ private:
       * @param max_size     单个日志文本大小, 默认50M
       * @param days_to_keep 保留日志天数, 默认10天
       * @param auto_cleanup 是否自动清理日志, 默认true
+      * @param console      是否输出到控制台, 默认true
+      * @param append_pid   多进程时在文件名中加入进程ID, 默认false
  * @return
 */
 #define LogAddConfig            LogManager::instance().addConfig
@@ -116,6 +117,11 @@ private:
  * @param days_to_keep  保留天数, 默认保留10天
  */
 #define LogCleanup         LogManager::instance().cleanup
+
+/*!
+ * @brief 刷新并关闭日志系统，确保缓冲区日志落盘
+ */
+#define LogShutdown        LogManager::instance().shutdown
 
 // 创建日志流
 #define LogTrace           LogManager::instance().trace

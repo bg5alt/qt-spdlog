@@ -358,6 +358,11 @@ private:
     // 辅助函数：写入容器
     template <typename Container>
     EStream& writeStdKeyValue(const Container& container, char open='{', char close='}') {
+        if (_depth > _max_depth) {
+            oss << " limit max depth";
+            return *this;
+        }
+        _depth++;
         oss << open;
         bool first = true;
         for (const auto& [key, value] : container) {
@@ -366,6 +371,7 @@ private:
             *this << key << ": " << value;
         }
         oss << close;
+        _depth--;
         return *this;
     }
 };

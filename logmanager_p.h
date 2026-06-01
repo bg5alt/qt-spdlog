@@ -3,34 +3,35 @@
 #pragma once
 
 
+#include <map>
+#include <memory>
+#include <mutex>
+#include <set>
 #include <string>
+#include <vector>
 
 #include <spdlog/spdlog.h>
-#include <iostream>
-#include <thread>
-#include <mutex>
-#include <map>
 
 class LogManagerPrivate {
 public:
-    // 日志器
-    std::map<std::string, std::shared_ptr<spdlog::logger>> _loggers;
-    std::vector<std::string>                               _logger_dirs;
     // 添加静态转换函数
     //Trace = 0, Debug = 1 , Info = 2 , Warn = 3 , Err = 4 , Critical = 5 , Off = 6
-    zspdlog::level::level_enum toSpdlogLevel(int level = 2);
+    static spdlog::level::level_enum toSpdlogLevel(int level);
 
-    // 定时清理日志任务线程
-    std::thread         _cleanup_thread;                    //  定时清理日志任务线程
-    std::atomic<bool>   _cleanup_thread_running = false;    //  线程运行标志
-    std::atomic<bool>   _cleanup_time_started = false;      //  定时任务启动标志
-    int                 _cleanup_days_to_keep = 10;         //  保留天数
-    bool                _cleanup_auto = false;              //  是否自动清理日志
-    bool                _init = false;                      //  是否初始化
+    std::shared_ptr<spdlog::logger> getLogger(const std::string& name) const;
 
-    std::shared_ptr<spdlog::logger> getLogger(const std::string& name);
+    // 日志器
+    mutable std::recursive_mutex _mutex;
+    std::map<std::string, std::shared_ptr<spdlog::logger>> _loggers;
+    std::vector<std::string>                               _logger_dirs;
+    std::set<std::string>                                  _active_log_files; // 当前进程正在写入的日志文件
+
+    int  _cleanup_days_to_keep = 10;         //  保留天数
+    bool _cleanup_auto = false;              //  是否自动清理日志
+    bool _append_pid = false;                //  是否使用进程ID隔离日志文件
+    bool _init = false;                      //  是否初始化
+    bool _shutdown = false;                  //  是否已关闭
+    int  _process_id = 0;                    //  当前进程ID
 };
-
-
 
 #endif // LOG_MANAGER_P_H
